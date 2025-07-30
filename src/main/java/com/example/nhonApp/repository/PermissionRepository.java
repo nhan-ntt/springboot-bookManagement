@@ -1,0 +1,9 @@
+package com.example.nhonApp.repository;
+
+import com.example.nhonApp.entity.Permission;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface PermissionRepository extends JpaRepository<Permission, Long> {
+}
