@@ -131,10 +131,11 @@
 		</dependency>
 
 <!--		REDIS-->
+		<!-- https://mvnrepository.com/artifact/org.redisson/redisson-spring-boot-starter -->
 		<dependency>
 			<groupId>org.redisson</groupId>
-			<artifactId>redisson</artifactId>
-			<version>3.16.3</version>
+			<artifactId>redisson-spring-boot-starter</artifactId>
+			<version>3.50.0</version>
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-cache -->
@@ -142,6 +143,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-cache</artifactId>
 			<version>2.6.7</version>
+		</dependency>
+
+		<dependency>
+			<groupId>javax.cache</groupId>
+			<artifactId>cache-api</artifactId>
 		</dependency>
 
 		<dependency>

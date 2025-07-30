@@ -1,16 +1,17 @@
 package com.example.nhonApp.service;
 
-import com.example.nhonApp.entity.*;
-import com.example.nhonApp.repository.*;
+import com.example.nhonApp.entity.Role;
+import com.example.nhonApp.entity.User;
+import com.example.nhonApp.entity.UserRole;
+import com.example.nhonApp.repository.RoleRepository;
+import com.example.nhonApp.repository.UserRepository;
+import com.example.nhonApp.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,12 +21,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RolePermissionService {
 
+    // Các repository cần thiết để lấy vai trò của user
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
-    private final RolePermissionRepository rolePermissionRepository;
-    private final PermissionRepository permissionRepository;
 
+    // Inject service cache để lấy các permission đã được cache
+    private final PermissionCacheService permissionCacheService;
+
+    /**
+     * Lấy toàn bộ quyền hạn (authorities) cho một user.
+     * Phương thức này không chứa logic cache, nó chỉ điều phối.
+     */
     @Transactional(readOnly = true)
     public Set<GrantedAuthority> getAuthoritiesForUser(String username) {
         User user = userRepository.findByUsername(username)
@@ -33,47 +40,24 @@ public class RolePermissionService {
 
         Set<GrantedAuthority> authorities = new HashSet<>();
 
+        // Lấy danh sách vai trò (roles) của user từ DB
         List<UserRole> userRoles = userRoleRepository.findByUserId(user.getId());
         List<Role> roles = roleRepository.findAllById(
                 userRoles.stream().map(UserRole::getRoleId).collect(Collectors.toList())
         );
 
+        // Duyệt qua từng vai trò để lấy quyền hạn tương ứng
         for (Role role : roles) {
+            // Thêm vai trò vào danh sách (ví dụ: "ROLE_ADMIN")
             authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName()));
 
-            // !!! CẢNH BÁO: Dòng này gây ra lỗi "self-invocation" !!!
-            // Cache sẽ không hoạt động vì đây là cuộc gọi bên trong cùng một object,
-            // nó bỏ qua proxy của Spring.
-            Collection<GrantedAuthority> permissions = this.getPermissionsForRole(role.getId());
+            // Gọi service cache để lấy danh sách các permission (dạng String)
+            Set<String> permissionNames = permissionCacheService.getPermissionNamesForRole(role.getId());
 
-            authorities.addAll(permissions);
+            // Chuyển đổi các permission String thành GrantedAuthority
+            permissionNames.forEach(name -> authorities.add(new SimpleGrantedAuthority(name)));
         }
+
         return authorities;
-    }
-
-    @Cacheable(value = "rolePermissions", key = "#roleId")
-    @Transactional(readOnly = true)
-    public Collection<GrantedAuthority> getPermissionsForRole(Long roleId) {
-        System.out.println("--- DATABASE QUERY: Lấy quyền cho roleId: " + roleId);
-
-        List<RolePermission> rolePermissions = rolePermissionRepository.findByRoleIdIn(List.of(roleId));
-        if (rolePermissions.isEmpty()) {
-            return Set.of();
-        }
-
-        List<Long> permissionIds = rolePermissions.stream()
-                .map(RolePermission::getPermissionId)
-                .collect(Collectors.toList());
-
-        List<Permission> permissions = permissionRepository.findAllById(permissionIds);
-
-        return permissions.stream()
-                .map(permission -> new SimpleGrantedAuthority(permission.getName()))
-                .collect(Collectors.toSet());
-    }
-
-    @CacheEvict(value = "rolePermissions", key = "#roleId")
-    public void clearCacheForRole(Long roleId) {
-        System.out.println("--- CACHE EVICT: Xóa cache cho roleId: " + roleId);
     }
 }
