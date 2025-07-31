@@ -6,6 +6,8 @@ import com.example.nhonApp.dto.request.LoginRequest;
 import com.example.nhonApp.dto.request.RefreshTokenRequest;
 import com.example.nhonApp.dto.request.RegisterRequest;
 import com.example.nhonApp.dto.response.TokenKcResponse;
+import com.example.nhonApp.entity.User;
+import com.example.nhonApp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -29,6 +31,7 @@ import java.util.Objects;
 public class AuthController {
 
     private final RestTemplate restTemplate;
+    private final UserRepository userRepository;
 
     @Value("${keycloak.token-uri}")
     private String tokenUri;
@@ -38,9 +41,6 @@ public class AuthController {
 
     @Value("${keycloak.client-secret}")
     private String clientSecret;
-
-    @Value("${keycloak.realm}")
-    private String realm;
 
     @Value("${keycloak.admin.url}")
     private String keycloakAdminUrl;
@@ -54,20 +54,17 @@ public class AuthController {
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(adminToken);
 
-            CredentialRepresentationDTO credential = new CredentialRepresentationDTO(
-                    "password", registerRequest.getPassword(), false
-            );
-
-            UserRepresentationDTO user = new UserRepresentationDTO();
-            user.setUsername(registerRequest.getUsername());
-            user.setEmail(registerRequest.getEmail());
-            user.setFirstName(registerRequest.getFirstName());
-            user.setLastName(registerRequest.getLastName());
-            user.setCredentials(Collections.singletonList(credential));
+            UserRepresentationDTO user = getUserRepresentationDTO(registerRequest);
 
             HttpEntity<UserRepresentationDTO> requestEntity = new HttpEntity<>(user, headers);
 
             restTemplate.postForEntity(keycloakAdminUrl + "/users", requestEntity, String.class);
+
+            User localUser = new User();
+            localUser.setUsername(registerRequest.getUsername());
+            localUser.setEmail(registerRequest.getEmail());
+
+            userRepository.save(localUser);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "User registered successfully"));
 
@@ -80,6 +77,20 @@ public class AuthController {
     }
     }
 
+    private static UserRepresentationDTO getUserRepresentationDTO(RegisterRequest registerRequest) {
+        CredentialRepresentationDTO credential = new CredentialRepresentationDTO(
+                "password", registerRequest.getPassword(), false
+        );
+
+        UserRepresentationDTO user = new UserRepresentationDTO();
+        user.setUsername(registerRequest.getUsername());
+        user.setEmail(registerRequest.getEmail());
+        user.setFirstName(registerRequest.getFirstName());
+        user.setLastName(registerRequest.getLastName());
+        user.setCredentials(Collections.singletonList(credential));
+        return user;
+    }
+
     private String getAdminToken() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -90,12 +101,6 @@ public class AuthController {
         formData.add("client_secret", clientSecret);
 
         HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(formData, headers);
-
-        ResponseEntity<TokenKcResponse> responseEntity = restTemplate.postForEntity(
-                tokenUri,
-                requestEntity,
-                TokenKcResponse.class
-        );
 
         try {
             ResponseEntity<TokenKcResponse> response = restTemplate.postForEntity(
