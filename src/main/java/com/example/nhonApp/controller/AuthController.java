@@ -1,72 +1,94 @@
 package com.example.nhonApp.controller;
 
-import com.example.nhonApp.dto.AuthResponse;
-import com.example.nhonApp.dto.LoginRequest;
-import com.example.nhonApp.dto.RegisterRequest;
-import com.example.nhonApp.entity.Role;
-import com.example.nhonApp.entity.User;
-import com.example.nhonApp.entity.UserRole;
-import com.example.nhonApp.repository.RoleRepository;
-import com.example.nhonApp.repository.UserRepository;
-import com.example.nhonApp.repository.UserRoleRepository;
-import com.example.nhonApp.security.JwtUtil;
-import lombok.RequiredArgsConstructor;
+import com.example.nhonApp.dto.request.LoginRequest;
+import com.example.nhonApp.dto.request.RefreshTokenRequest;
+import com.example.nhonApp.dto.response.TokenKcResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+
 
 import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/api/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthenticationManager authenticationManager;
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
-    private final UserRoleRepository userRoleRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtUtil jwtUtil;
+    private final RestTemplate restTemplate;
+    @Value("${keycloak.token-uri}")
+    private String tokenUri;
 
-    @PostMapping("/login")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginRequest.getUsername(),
-                        loginRequest.getPassword()
-                )
-        );
+    @Value("${keycloak.client-id}")
+    private String clientId;
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        String jwt = jwtUtil.generateToken(authentication);
+    @Value("${keycloak.client-secret}")
+    private String clientSecret;
 
-        return ResponseEntity.ok(new AuthResponse(jwt));
-
+    public AuthController(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
-        if (userRepository.findByUsername(registerRequest.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().body("Username is already taken");
-        }
+    @PostMapping("/login")
+    public ResponseEntity<TokenKcResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
 
-        User user = new User();
-        user.setUsername(registerRequest.getUsername());
-        user.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
-        user.setEmail(registerRequest.getEmail());
+        formData.add("grant_type", "password");
+        formData.add("client_id", clientId);
+        formData.add("client_secret", clientSecret);
+        formData.add("username", loginRequest.getUsername());
+        formData.add("password", loginRequest.getPassword());
 
-        User savedUser = userRepository.save(user);
+        TokenKcResponse tokenKcResponse = getToken(formData);
+        return ResponseEntity.ok(tokenKcResponse);
+    }
 
-        Role userRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenKcResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
 
-        userRoleRepository.save(new UserRole(savedUser.getId(), userRole.getId()));
+        formData.add("grant_type", "refresh_token");
+        formData.add("client_id", clientId);
+        formData.add("client_secret", clientSecret);
+        formData.add("refresh_token", refreshTokenRequest.getRefreshToken());
 
-        return ResponseEntity.ok("User registered successfully");
+        TokenKcResponse tokenKcResponse = getToken(formData);
+        return ResponseEntity.ok(tokenKcResponse);
+    }
+
+    @PostMapping("/client-credentials")
+    public ResponseEntity<TokenKcResponse> getServiceToken() {
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+
+        formData.add("grant_type", "client_credentials");
+        formData.add("client_id", clientId);
+        formData.add("client_secret", clientSecret);
+
+        TokenKcResponse tokenKcResponse = getToken(formData);
+        return ResponseEntity.ok(tokenKcResponse);
+    }
+
+    private TokenKcResponse getToken(MultiValueMap<String, String> formData) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(formData, headers);
+
+        // call api keycloak to get token
+        ResponseEntity<TokenKcResponse> responseEntity = restTemplate.postForEntity(
+                tokenUri,
+                requestEntity,
+                TokenKcResponse.class
+        );
+
+        return responseEntity.getBody();
     }
 }

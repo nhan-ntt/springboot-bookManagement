@@ -52,7 +52,7 @@ public class RolePermissionService {
             authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName()));
 
             // Gọi service cache để lấy danh sách các permission (dạng String)
-            Set<String> permissionNames = permissionCacheService.getPermissionNamesForRole(role.getId());
+            Set<String> permissionNames = permissionCacheService.getPermissionNamesForRole(role.getName());
 
             // Chuyển đổi các permission String thành GrantedAuthority
             permissionNames.forEach(name -> authorities.add(new SimpleGrantedAuthority(name)));
