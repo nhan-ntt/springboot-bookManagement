@@ -1,5 +1,7 @@
 package com.example.nhonApp.repository;
 
+import com.example.nhonApp.entity.Role;
+import com.example.nhonApp.entity.User;
 import com.example.nhonApp.entity.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -12,6 +14,7 @@ import java.util.List;
 @Repository
 public interface UserRoleRepository extends JpaRepository<UserRole, UserRole.UserRoleId> {
     List<UserRole> findByUserId(Long userId);
+    boolean existsByUserIdAndRoleId(Long userId, Long roleId);
 }
 
 //public interface UserRoleRepository extends JpaRepository<UserRole, Long> {

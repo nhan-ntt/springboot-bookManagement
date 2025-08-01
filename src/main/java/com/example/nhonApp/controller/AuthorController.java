@@ -7,6 +7,8 @@ import javax.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,6 +31,9 @@ public class AuthorController {
         List<AuthorDTO> authorDTOs = authors.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        System.out.println("hello: " + authentication.getAuthorities());
         return ResponseEntity.ok(authorDTOs);
     }
 
