@@ -25,6 +25,8 @@ public class SecurityConfig {
                 .cors().and()
                 .authorizeHttpRequests(auth -> auth
                         .antMatchers("/api/auth/**").permitAll()
+                        .antMatchers("/i18n/**").permitAll()
+                        .antMatchers("/messages").permitAll()
                         .antMatchers("/swagger-ui/**").permitAll()
                         .antMatchers("/swagger-ui.html").permitAll()
                         .antMatchers("/api-docs/**").permitAll()
